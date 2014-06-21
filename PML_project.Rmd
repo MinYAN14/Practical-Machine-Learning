@@ -1,0 +1,203 @@
+A Machine Learning Algorithm to Predict Activity Quality from Activity Monitors
+====================================
+
+### Practical Machine Learning - Course Project 1
+### Franc Bracun
+
+
+## Introduction
+With the availability of low cost accelerometers, there are many opportunities to measure human activities. One application of this is measuring the proper form of weight lifting. What people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants and examine whether we can predict the manner in which they did the exercise.  
+
+Participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+## Preparing working environment
+Set working directory and download necessary packages. We will need 
+"caret" and "randomForest" packages."
+```{r warning=FALSE}
+
+start_time <- proc.time()
+
+
+## Checks if the required "caret" package is installed. If not, instales it.  
+if(!is.element("caret", installed.packages()[,1])){
+  print("Installing packages ...")
+  install.packages("caret")
+}
+library(caret)
+## Checks if the required "randomForest" package is installed. If not, instales it. 
+if(!is.element("randomForest", installed.packages()[,1])){
+  print("Installing packages ...")
+  install.packages("randomForest")
+}
+library(randomForest)
+
+```
+
+## Loading data 
+Loading training and testing data sets. 
+```{r warning=FALSE}
+training_data <- read.csv("pml-training.csv", header=TRUE, sep=",",stringsAsFactors=FALSE)
+testing_data <- read.csv("pml-testing.csv", header=TRUE, sep=",",stringsAsFactors=FALSE)
+```
+
+## Data preprocessing
+Data pre-processing techniques generally refer to the addition, deletion, or transformation of training set data. One of the first decisions to make when modeling is to decide which samples from dataset will be used to build model and which samples will be used to evaluate model performance.
+
+We split training data into two sets. One for training (i.e., model building) and one for cross validation (i.e., model performance evaluation). Random selection without replacement was chosen to split the data set into a training set (75%) and a cross validation set (25%). The training data set needs to be large enough so that a relatively high accuracy can be achieved, and the cross validation set also needs to be large enough to give a good indication of the out of sample error. 
+
+```{r warning=FALSE}
+
+set.seed(5123512) #Set seed for reproducibility purposes.
+
+trainingIndex <- createDataPartition(training_data$classe, list=FALSE, p=.75)
+training = training_data[trainingIndex,]
+testing = training_data[-trainingIndex,]
+```
+
+I used the summary() function to spot possible problems in data. However, since there is 160 variables using summary statistics to spot problems is not convenient at this point. Therefore I have first removed indicators with near zero variance since such uninformative variables may have little effect on the calculations. Moreover, removal of the near-zero variance predictors has a positive effect on the model fit and simplifies the model. A tree-based model is impervious to this type of predictor since it would never be used in a split.  
+
+```{r warning=FALSE}
+nzv <- nearZeroVar(training[,-length(names(training))]) #Output variable should not be included.
+training <- training[-nzv]
+testing <- testing[-nzv]
+testing_data <- testing_data[-nzv] #Don't forget to also remove indicators with near zero variance from testing_data.
+print(paste("As a result of this operation", length(nzv), "near-zero variance predictors have been removed!", sep=" "))
+```
+The number of predictors is still high. However, since we know that data from wearable sensors, which have been used to record users performance, are numeric, we filter columns to only include numeric features and outcome. 
+
+```{r warning=FALSE}
+num_features_idx = which(lapply(training,class) %in% c('numeric') )
+print(paste("As a result of this operation", length(num_features_idx), "predictors have been extracted!", sep=" "))
+#summary(training[,num_features_idx])
+```
+
+Summary statistics reveals that many missing values exist in our training data. Therefore we impute missing values
+
+```{r warning=FALSE}
+preModel <- preProcess(training[,num_features_idx], method=c('knnImpute'))
+pre_training <- cbind(training$classe, predict(preModel, training[,num_features_idx]))
+pre_testing <- cbind(testing$classe, predict(preModel, testing[,num_features_idx]))
+pre_testing_data <- predict(preModel, testing_data[,num_features_idx]) # Don't forget to also perform 
+                                                                       # transformation on testing_data.
+
+#Fix 1st column label on classe
+names(pre_training)[1] <- 'classe'
+names(pre_testing)[1] <- 'classe'
+
+```
+
+## Model training and tuning 
+
+A random forest model is built using the numerical variables provided in "pre_training" data frame. As we will see later, this provides good enough accuracy to predict the twenty test cases. A random forest model is actually one of the best prediction models. It can reduce training variance and sensitivity to overfitting. Two parameters are particularly important to  control the growth of trees in randomForest() function, namely 'ntree' and 'mtry':  
+* 'ntrees': Number of trees to grow (i.e., parameter 'ntree') should not be set to too small a number, to ensure that every input row gets predicted at least a few times. We use the default parameter value for number of trees to grow, which is 500.
+
+* 'mtry': By default, the randomForest() function in R draws mtry=floor(sqrt(number_of_predictors)) for classification trees. However, as we already reduced the number of predictor variables in previous steps, it is not appropriate to use default value for 'mtry' parameter. We have to tune a random forest for the optimal mtry parameter. As can be seen in the plot below, by using function tuneRF() from the package 'randomForest', we can obtain the optimal 'mtry' parameter of 27. This is a computationally expensive process and it takes approximately  7 minutes for 'mtry' parameter tuning and 3 minutes for random forest model training.
+
+```{r warning=FALSE}
+
+# Model tunning
+mytime <- proc.time()
+predictors <- pre_training[,-which(names(pre_training) == "classe")]
+mtry_parameters <- tuneRF(x=predictors, y=pre_training$classe, ntreeTry=500, stepFactor=1.5, doBest=FALSE)
+preperedata_time <- proc.time() - mytime
+print(preperedata_time)
+
+tuned_mtry <- mtry_parameters[length(mtry_parameters[,1]),1]
+
+#Model training
+mytime <- proc.time()
+rf_model <- randomForest(classe ~ ., pre_training, ntree=500, mtry=tuned_mtry, importance=TRUE)
+preperedata_time <- proc.time() - mytime
+print(preperedata_time)
+```
+
+## Cross Validation
+
+We can measure the accuracy of our model by using our training and  cross validation sets. With the training set we can detect if our model has bias due to rigidity of our mode. With the cross validation set, we can determine if we have variance due to overfitting.
+
+* Variance refers to the amount by which our estimated output would change if we estimated it using a different training data set.
+
+* On the other hand, bias refers to the error that is introduced by approximating a real-life problem, which may be extremely complicated, by a much simpler model. 
+
+Generally, more flexible methods result in less bias but higher variance. We would like to know the expected test error of our estimated model. As the model becomes more and more complex, it uses the training data more and is able to adapt to more complicated underlying structures. Hence there is a decrease in bias but an increase in variance.
+
+
+### In-sample accuracy
+
+To estimate in sample accuracy we use our training set 'pre_training'.
+
+```{r warning=FALSE}
+training_pred <- predict(rf_model, pre_training)
+print(confusionMatrix(training_pred, pre_training$classe))
+```
+The in sample accuracy is 100% which indicates, the model does not suffer from bias. However, we this does not mean that the variance is not high. Therefore, we have to estimate out-of-sample accuracy.
+
+### Out-of-sample accuracy
+
+To estimate out-of-sample accuracy we use our cross-validation set 'pre_testing'.
+
+```{r warning=FALSE}
+testing_pred <- predict(rf_model, pre_testing)
+```
+
+Confusion Matrix:
+```{r warning=FALSE}
+print(confusionMatrix(testing_pred, pre_testing$classe))
+```
+
+The cross validation accuracy is greater than 99%, which should be sufficient for predicting the twenty test observations. Based on the lower bound of the 95% confidence interval we would expect to achieve a 98.8% classification accuracy on new data provided, that is we expect that the out of sample error would be 1,2%.
+
+At this point it is important to note that the new data must be collected and preprocessed in a manner consistent with the training data.
+
+## Test Set Prediction Results
+
+Applying a random forest model to predict the manner in which participants did the exercise ha resulted in 100% classification accuracy on the twenty test observations.
+```{r warning=FALSE}
+answers <- predict(rf_model, pre_testing_data)
+answers
+
+#Store answers for submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+#Create results directory
+if(!file.exists("results_folder")){
+        print("Creating result folder")
+        dir.create("results_folder")
+} 
+
+setwd("./results_folder")
+
+pml_write_files(answers)
+```
+
+
+## Conclusion
+Model provides very good prediction accuracy of the manner in which participants did the weight lifting as measured with accelerometers.
+
+
+```{r warning=FALSE}
+end_time <- proc.time() - start_time
+
+end_time <- floor(end_time[3]/60)
+
+print(paste("--- Total time spent to produce predictive model is approximately",end_time , "minutes. ---", sep=" "))
+
+```
+
+### References
+
+[1]: Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+[2]: Max Kuhn. Contributions from Jed Wing, Steve Weston, Andre Williams, Chris Keefer, Allan Engelhardt, Tony Cooper, Zachary Mayer and the R Core Team. 'caret' package (Version: 6.0-30). June 4, 2014.
+
+[3]: Fortran original by Leo Breiman and Adele Cutler, R port by Andy Liaw and MatthewWiener. ‘randomForest’ package (Version 4.6-7). August 29, 2013.
+
+
