@@ -13,7 +13,11 @@ In this project, the goal is to use data from accelerometers on the belt, forear
 Participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
 
 ## Preparing working environment
-Set working directory and download necessary packages. We will need 
+Set working directory 
+
+setwd("D:/coursera/practical_machine_learning")
+
+and download necessary packages. We will need 
 "caret" and "randomForest" packages."
 ```{r warning=FALSE}
 
@@ -198,6 +202,6 @@ print(paste("--- Total time spent to produce predictive model is approximately",
 
 [2]: Max Kuhn. Contributions from Jed Wing, Steve Weston, Andre Williams, Chris Keefer, Allan Engelhardt, Tony Cooper, Zachary Mayer and the R Core Team. 'caret' package (Version: 6.0-30). June 4, 2014.
 
-[3]: Fortran original by Leo Breiman and Adele Cutler, R port by Andy Liaw and MatthewWiener. ‘randomForest’ package (Version 4.6-7). August 29, 2013.
+[3]: Fortran original by Leo Breiman and Adele Cutler, R port by Andy Liaw and MatthewWiener. Â‘randomForestÂ’ package (Version 4.6-7). August 29, 2013.
 
 
