@@ -1,7 +1,7 @@
 Practical-Machine-Learning
 ==========================
 This repository contains my PML_project.Rmd and compiled PML_project.HTML file performing my analysis.
-###### Note that a repo with a gh-pages branch  to view the "PML_project.html" page on-line is available from the website here: http://fbracun.github.io/Practical-Machine-Learning/PML_project.html 
+###### Note that a repo with a gh-pages branch  to view the "PML_project.html" page on-line is available from the website here:https://github.com/MinYAN14/Practical-Machine-Learning/blob/master/PML_project.html 
 
 ### Course Project Description
 With the availability of low cost accelerometers, there are many opportunities to measure human activities. One application of this is measuring the proper form of weight lifting. What people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
